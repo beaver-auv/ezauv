@@ -5,7 +5,6 @@ import quaternion
 
 from ezauv.utils.logger import LogLevel
 
-
 class DeadzoneOptimizer:
     def __init__(self, M, bounds, deadzones):
         self.M = M

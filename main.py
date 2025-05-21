@@ -1,3 +1,5 @@
+#Code is broken. Will be scrapped later
+
 import numpy as np
 
 from ezauv.auv import AUV
