@@ -24,10 +24,34 @@ motor_directions = [
 ]   # this debug motor configuration is the same as bvr auv's hovercraft
 
 
-bounds = [[-1, 1]] * 4 # motors can't go outside of (-100%, 100%)...
+bounds = [[-0.5, 0.5]] * 4 # motors can't go outside of (-100%, 100%)...
 deadzone = [[-0.1, 0.1]] * 4 # or inside (-10%, 10%), unless they equal 0 exactly
 
-sim = Simulation(motor_locations, motor_directions, bounds, deadzone)
+degrees = [
+    1624.02745,
+    874.8296,
+    -8224.85246,
+    -5033.91631,
+    17652.4645,
+    12414.2505,
+    -20920.4284,
+    -17068.0915,
+    14947.3121,
+    14259.2048,
+    -6593.46214,
+    -7411.32156,
+    1762.97753,
+    2365.79253,
+    -266.73177,
+    -445.54284,
+    18.76821,
+    49.1195,
+    0.5111399,
+    0.3424571,
+    -0.001137525
+][::-1] # this defines our motor's thrust curve
+
+sim = Simulation(motor_locations, motor_directions, bounds, deadzone, degrees)
 
 sim_anchovy = AUV(
     motor_controller = MotorController(
@@ -50,11 +74,12 @@ sim_anchovy = AUV(
                     Motor.Range(deadzone[i][0], deadzone[i][1])
                     )
                 for i, (loc, direction) in enumerate(zip(motor_locations, motor_directions))
-                ]
+                ],
+            coefficients = degrees
         ),
         sensors = SensorInterface(sensors=[sim.imu(0.05)]),
         lock_to_yaw = False,
-        clock = sim.clock()
+        clock = sim.clock(),
     )
 
 sim_anchovy.register_subtask(Simulate(sim)) # gotta make sure it knows to simulate the sub
@@ -62,7 +87,7 @@ sim_anchovy.register_subtask(Simulate(sim)) # gotta make sure it knows to simula
 mission = Path(
     AccelerateVector(AccelerationState(Tx=1, local=False), 3),      # start by going right locally,
     AccelerateVector(AccelerationState(Tx=-1, local=False), 3),     # then slow down by going left locally,
-    AccelerateVector(AccelerationState(Rz=100, local=False), 5),    # then spin really fast,
+    AccelerateVector(AccelerationState(Rz=-100, local=False), 5),    # then spin really fast,
     AccelerateVector(AccelerationState(Tx=-10, local=False), 5),    # then go left globally, while spinning
 )
 

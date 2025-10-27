@@ -129,12 +129,13 @@ class Motor:
         bounds: Range,
         deadzone: Range,
     ):
-        self.thrust_vector: np.ndarray = thrust_vector
+        self.thrust_vector: np.ndarray = thrust_vector / np.linalg.norm(thrust_vector)
         self.position: np.ndarray = position
         self.set: Callable = set_motor
 
         self.initialize: Callable = initialize
         self.torque_vector: np.ndarray = np.cross(self.position, self.thrust_vector)
+        self.torque_vector /= np.linalg.norm(self.torque_vector)
 
         self.bounds: Motor.Range = bounds
         self.deadzone: Motor.Range = deadzone
@@ -148,19 +149,20 @@ class Motor:
         pass
 
 class MotorController:
-    def __init__(self, *, inertia: np.ndarray, motors: List[Motor]):
+    def __init__(self, *, inertia: np.ndarray, motors: List[Motor], coefficients=[1]):
         self.inv_inertia: np.ndarray = np.linalg.inv(inertia)  # the inverse inertia tensor of the entire body
         self.motors: np.ndarray = np.array(motors)  # the list of motors this sub owns
-        self.opti_motors: np.ndarray = np.array(motors) # the list of motors the sub needs to optimize
         self.log: Callable = lambda str, level=None: print(
             f"Motor logger is not set --- {str}"
         )
+
+        self.polynomial = np.polynomial.Polynomial(coefficients)
 
         self.optimizer: Optional[DeadzoneOptimizer] = None
 
         self.motor_matrix = None
         self.mT = None
-        self.reset_optimizer()
+        self.reset_optimizer(self.polynomial)
 
         self.prev_sent = {}
 
@@ -183,7 +185,7 @@ class MotorController:
             level=level,
         )
 
-    def reset_optimizer(self):
+    def reset_optimizer(self, p):
         """
         Recalculate the motor matrix.
         Should be called if the inertia, motor locations, or motor thrust vectors are changed.
@@ -191,7 +193,7 @@ class MotorController:
         bounds = []
         deadzones = []
 
-        for i, motor in enumerate(self.opti_motors):
+        for i, motor in enumerate(self.motors):
             new_vector = np.array(
                 [
                     np.concatenate(
@@ -205,8 +207,8 @@ class MotorController:
             else:
                 self.motor_matrix = np.hstack((self.motor_matrix, new_vector))
 
-            bounds.append((motor.bounds.min, motor.bounds.max))
-            deadzones.append((motor.deadzone.min, motor.deadzone.max))
+            bounds.append((p(motor.bounds.min), p(motor.bounds.max)))
+            deadzones.append((p(motor.deadzone.min), p(motor.deadzone.max)))
         self.optimizer = DeadzoneOptimizer(self.motor_matrix, bounds, deadzones)
         self.mT = self.motor_matrix.T
 
@@ -232,13 +234,26 @@ class MotorController:
         rotated_wanted = np.append(acceleration.translation, np.array([Rx, Ry, Rz]))
 
         optimized = self.optimizer.optimize(rotated_wanted, lock_to_yaw)
-        return optimized
+
+        if not optimized[0]:
+            return False, None
+
+        motor_controls = []
+        for target in optimized[1]:
+            roots = (self.polynomial - target).roots()
+            motor_controls.append(
+                min([r.real for r in roots if abs(r.imag) < 1e-8],
+                key=lambda x: abs(x))
+            )
+        
+        return True, motor_controls
 
     def set_motors(self, motor_speeds):
         """
         Set each motor to a corresponding speed of motor_speeds.
         """
-        for i, motor in enumerate(self.opti_motors):
+        print(motor_speeds)
+        for i, motor in enumerate(self.motors):
             speed = motor_speeds[i]
             if motor in self.prev_sent and self.prev_sent[motor] == speed:
                 continue
@@ -250,10 +265,3 @@ class MotorController:
         Check if the last value sent to each motor was zero.
         """
         return np.all(np.isclose([view[1] for view in self.prev_sent.items()], 0))
-    def change_mode(self, motor: Motor):
-        # Change motor mode to not optimize
-        if motor in self.opti_motors:
-            pop(self.opti_motors.index(motor))
-        # Add it back to opti_motor
-        else:
-            self.opti_motors.add(motor)

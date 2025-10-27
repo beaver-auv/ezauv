@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 # kinda sucks, 2d
 class Simulation:
 
-    def __init__(self, motor_locations, motor_directions, bounds, deadzone):
+    def __init__(self, motor_locations, motor_directions, bounds, deadzone, coefficients=[1]):
         self.location = np.array([0., 0.])
         self.velocity = np.array([0., 0.])
         self.acceleration = np.array([0., 0.])
@@ -18,7 +18,8 @@ class Simulation:
         self.rotational_acceleration = 0
 
         self.motor_locations = motor_locations # relative to center
-        self.motor_directions = motor_directions
+        self.motor_directions = [direction/np.linalg.norm(direction) for direction in motor_directions]
+        
         self.motor_speeds = np.array([np.array([0., 0., 0.]) for _ in motor_directions])
         self.moment_of_inertia = 1/6
 
@@ -39,8 +40,11 @@ class Simulation:
         self.fake_clock = FakeClock()
         self.time = 0
         self.temp_count = 0
+
+        self.polynomial = np.polynomial.Polynomial(coefficients)
     
     def simulate(self, delta_time):
+        # print(delta_time)
         delta_time += self.fake_clock.perf_counter() - self.time
         quantized_time = int(math.floor(self.time / self.timestep))
         quantized_new_time = int(math.floor((self.time + delta_time) / self.timestep))
@@ -89,7 +93,8 @@ class Simulation:
         self.animator.render()
 
     def update_motor_speeds(self, speeds):
-        self.motor_speeds = [d * s for d, s in zip(self.motor_directions, speeds)]
+        for i, speed in enumerate(speeds):
+            self.set(i, speed)
         
     
     def imu(self, dev):
@@ -103,7 +108,7 @@ class Simulation:
             speed = max(min(speed, self.bounds[index][1]), self.bounds[index][0])
             if(self.deadzone[index][0] > speed > self.deadzone[index][1]):
                 speed = 0
-            self.motor_speeds[index] = self.motor_directions[index] * speed
+            self.motor_speeds[index] = self.motor_directions[index] * self.polynomial(speed)
     
     def set_motor(self, index):
         return lambda speed: self.set(index, speed)
