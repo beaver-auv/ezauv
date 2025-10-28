@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 # kinda sucks, 2d
 class Simulation:
 
-    def __init__(self, motor_locations, motor_directions, bounds, deadzone, coefficients=[1]):
+    def __init__(self, motor_locations, motor_directions, bounds, deadzone, coefficients=[0, 1]):
         self.location = np.array([0., 0.])
         self.velocity = np.array([0., 0.])
         self.acceleration = np.array([0., 0.])

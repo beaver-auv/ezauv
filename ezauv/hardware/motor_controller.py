@@ -149,7 +149,7 @@ class Motor:
         pass
 
 class MotorController:
-    def __init__(self, *, inertia: np.ndarray, motors: List[Motor], coefficients=[1]):
+    def __init__(self, *, inertia: np.ndarray, motors: List[Motor], coefficients=[0, 1]):
         self.inv_inertia: np.ndarray = np.linalg.inv(inertia)  # the inverse inertia tensor of the entire body
         self.motors: np.ndarray = np.array(motors)  # the list of motors this sub owns
         self.log: Callable = lambda str, level=None: print(
@@ -241,6 +241,7 @@ class MotorController:
         motor_controls = []
         for target in optimized[1]:
             roots = (self.polynomial - target).roots()
+            # print(self.polynomial)
             motor_controls.append(
                 min([r.real for r in roots if abs(r.imag) < 1e-8],
                 key=lambda x: abs(x))
@@ -252,7 +253,6 @@ class MotorController:
         """
         Set each motor to a corresponding speed of motor_speeds.
         """
-        print(motor_speeds)
         for i, motor in enumerate(self.motors):
             speed = motor_speeds[i]
             if motor in self.prev_sent and self.prev_sent[motor] == speed:
