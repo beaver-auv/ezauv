@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ezauv',
-    version='0.1.8',
+    version='0.1.9',
     packages=find_packages(),
     install_requires=[
         'gurobipy==12.0.1',
