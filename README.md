@@ -22,27 +22,27 @@ This example creates a simulation with a square hovercraft, moves it forward, mo
 ```python
 import numpy as np
 
-from ezauv.auv import AUV
+from ezauv import AUV
 from ezauv.hardware import MotorController, Motor, SensorInterface
-from ezauv.utils.inertia import InertiaBuilder, Cuboid
+from ezauv.utils import InertiaBuilder, Cuboid
 from ezauv.mission.tasks.main import AccelerateVector
 from ezauv.mission.tasks.subtasks import HeadingPID, Simulate
 from ezauv.mission import Path
-from ezauv.simulation.core import Simulation
+from ezauv.simulation import Simulation
 from ezauv import AccelerationState, TotalAccelerationState
 
 motor_locations = [
-    np.array([-1., 1., 0.]),    # motor 2
-    np.array([-1., -1., 0.]),   # motor 3
-    np.array([1., 1., 0.]),     # motor 4
-    np.array([1., -1., 0.]),    # motor 5
+    np.array([-1., 1., 0.]),    # motor 1
+    np.array([-1., -1., 0.]),   # motor 2
+    np.array([1., 1., 0.]),     # motor 3
+    np.array([1., -1., 0.]),    # motor 4
 ]
 
 motor_directions = [
-    np.array([1., 1., 0.]),     # motor 2
+    np.array([1., 1., 0.]),     # motor 1
+    np.array([1., -1., 0.]),    # motor 2
     np.array([1., -1., 0.]),    # motor 3
-    np.array([1., -1., 0.]),    # motor 4
-    np.array([1., 1., 0.]),     # motor 5
+    np.array([1., 1., 0.]),     # motor 4
 ]   # this debug motor configuration is the same as bvr auv's hovercraft
 
 
@@ -94,7 +94,7 @@ mission = Path(
     AccelerateVector(AccelerationState(Tx=1, local=False), 3),      # start by going right locally,
     AccelerateVector(AccelerationState(Tx=-1, local=False), 3),     # then slow down by going left locally,
     AccelerateVector(AccelerationState(Rz=-20, local=False), 5),    # then spin really fast,
-    AccelerateVector(AccelerationState(Tx=-2, local=False), 5),    # then go left globally, while spinning
+    AccelerateVector(AccelerationState(Tx=-2, local=False), 5),     # then go left globally, while spinning
 )
 
 sim_anchovy.travel_path(mission)
