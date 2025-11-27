@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 # The abstract interface for interacting with the hardware; this should be
 # extended and registered into the auv
 
+
 class Sensor(ABC):
     def __init__(self, log: callable):
         self.log = log
@@ -28,6 +29,7 @@ class Sensor(ABC):
         """
         pass
 
+
 class SensorInterface:
     def __init__(self, sensors: list[Sensor]):
         self.sensors: list[Sensor] = sensors
@@ -47,3 +49,4 @@ class SensorInterface:
         for sensor in self.sensors:
             data.update(sensor.get_data())
         return data
+
