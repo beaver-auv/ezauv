@@ -37,6 +37,6 @@ class CameraObject:
     def frame(self):
         ret, frame = self.camera.read()
         if not ret:
-            self.log("Bro forgot the camera 💀💀💀 ts is not tuff")
+            self.log("Camera error.")
             sys.exit(1)
         return frame
