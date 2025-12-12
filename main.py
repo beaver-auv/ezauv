@@ -36,7 +36,7 @@ degrees = [
 ]   # this defines our motor's pwm -> thrust curve as t = -0.01 + 0.4p - 0.4p^2 + 1.4p^3
 
 
-sim = SimulationClient(motor_locations, motor_directions)
+sim = SimulationClient()
 sim.connect()
 
 sim_anchovy = AUV(
