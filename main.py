@@ -7,6 +7,7 @@ from ezauv.mission.tasks.main import AccelerateVector
 from ezauv.mission.tasks.subtasks import HeadingPID, Simulate
 from ezauv.mission import Path
 from ezauv.simulation import Simulation
+from ezauv.simulation_client import SimulationClient, UpdateSimClient
 from ezauv import AccelerationState, TotalAccelerationState
 
 motor_locations = [
@@ -35,7 +36,8 @@ degrees = [
 ]   # this defines our motor's pwm -> thrust curve as t = -0.01 + 0.4p - 0.4p^2 + 1.4p^3
 
 
-sim = Simulation(motor_locations, motor_directions, bounds, deadzone, degrees)
+sim = SimulationClient()
+sim.connect()
 
 sim_anchovy = AUV(
     motor_controller = MotorController(
@@ -66,7 +68,7 @@ sim_anchovy = AUV(
         clock = sim.clock(),
     )
 
-sim_anchovy.register_subtask(Simulate(sim)) # gotta make sure it knows to simulate the sub
+sim_anchovy.register_subtask(UpdateSimClient(sim)) # gotta make sure it knows to simulate the sub
 
 mission = Path(
     AccelerateVector(AccelerationState(Tx=1, local=False), 3),      # start by going right locally,
@@ -76,5 +78,3 @@ mission = Path(
 )
 
 sim_anchovy.travel_path(mission)
-
-sim.render() # this draws an animation using pygame; you can see it in videos/animation.mp4
