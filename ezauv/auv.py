@@ -8,6 +8,7 @@ from ezauv.hardware.motor_controller import MotorController
 from ezauv.hardware.sensor_interface import SensorInterface
 from ezauv.mission.mission import Path, Subtask
 from ezauv.utils import Logger, LogLevel, Clock
+from ezauv.map import Map
 
 class AUV:
     def __init__(self, *,
@@ -19,7 +20,7 @@ class AUV:
 
                  logging: bool = False,                 # whether to save log to file
                  console: bool = True,                  # whether to print log to console
-                 lock_to_yaw: bool = False              # whether to lock the AUV to only the yaw rotation axis in global space
+                 lock_to_yaw: bool = False,              # whether to lock the AUV to only the yaw rotation axis in global space
                  # more detail for above, this means that if the AUV is pitched/rolled it will 
                  # not account for those rotations when solving for motor commands in global space
 
@@ -29,6 +30,7 @@ class AUV:
 
                  # if needed, you can always send manual rotation commands on non-yaw axes which will
                  # avoid this, and this flag can also be enabled/disabled throughout the run
+                 map: Map = None
                  ):
         """
         Create a sub wrapper object.\n
@@ -45,6 +47,7 @@ class AUV:
         self.lock_to_yaw = lock_to_yaw
 
         self.clock = clock
+        self.map = map
 
         self.logger = Logger(console, logging)
 
@@ -64,6 +67,7 @@ class AUV:
         """Register a subtask to be run every iteration for this AUV."""
         subtask.clock = self.clock
         self.subtasks.append(subtask)
+        subtask.start(self.map)
 
     def kill(self):
         """Set all motors to 0 speed, killing the sub."""
@@ -77,16 +81,19 @@ class AUV:
         try:
             for task in mission.path:
                 self.logger.log(f"Beginning task {task.name()}")
-                task.clock = self.clock
 
-                
+                now = self.clock.perf_counter()
+                prev_update = now
+                task.start(self.map)
                 while(not task.finished()):
-                    prev_update = self.clock.perf_counter()
+                    now, prev_update = self.clock.perf_counter(), now
+                    dt = now - prev_update
                     sensor_data = self.sensors.get_data()
-                    wanted_direction = copy.deepcopy(task.update(sensor_data))
-                    
+                    sensor_data["dt"] = dt
+                    self.map.update(sensor_data)
+                    wanted_direction = copy.deepcopy(task.wanted_acceleration(self.map))
                     for subtask in self.subtasks:
-                        wanted_direction += subtask.update(sensor_data)
+                        wanted_direction += subtask.update()
 
                     rotation = sensor_data["rotation"] if "rotation" in sensor_data else R.identity()
                     solved_motors = self.motor_controller.solve(
@@ -97,8 +104,9 @@ class AUV:
 
                     if(solved_motors[0]):
                         self.motor_controller.set_motors(solved_motors[1])
-
+                    
                     time_till_refresh = self.refresh_rate - (self.clock.perf_counter() - prev_update)
+                    # print("Time taken for loop (s):", np.round(self.clock.perf_counter() - prev_update, 4))
                     if(time_till_refresh > 0):
                         self.clock.sleep(time_till_refresh)
 
@@ -131,4 +139,5 @@ class AUV:
                 else:
                     self.logger.log("All kills ineffective. Manual intervention required", level=LogLevel.ERROR)
             
+            self.map.kill()
             self.logger.end()
