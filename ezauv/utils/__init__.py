@@ -2,3 +2,4 @@ from ezauv.utils.inertia import InertiaGeometry, InertiaBuilder, Cuboid, HollowC
 from ezauv.utils.logger import Logger, LogLevel
 from ezauv.utils.pid import PID
 from ezauv.utils.clock import Clock
+from ezauv.utils.kalman_filter import KalmanFilter
