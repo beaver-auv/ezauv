@@ -1,4 +1,5 @@
 import heapq
+from collections import deque
 import numpy as np
 from ezauv.map.grid_objects import GridObject
 from ezauv.map.path import Path
@@ -109,11 +110,11 @@ def planner_worker(
 
         elif kind == "plan":
             _, start, goal_region, smooth, temporary_obstacles, path_id = msg
-            print("Planning path to", goal_region, "from", start)
+            # print("Planning path to", goal_region, "from", start)
             a = time.time()
             path, obstacle_pixels, goal_pixels = planner.find_path(start, goal_region, smooth, temporary_obstacles)
-            print("Path planned in", time.time() - a, "seconds")
-            print("Planned path with", len(path.waypoints), "waypoints")
+            # print("Path planned in", time.time() - a, "seconds")
+            # print("Planned path with", len(path.waypoints), "waypoints")
             try:
                 while True:
                     result_q.get_nowait()
@@ -218,8 +219,8 @@ class PathPlanner:
         g_score = np.full((h, w), INF, dtype=np.float32)
         closed = np.zeros((h, w), dtype=np.bool_)
 
-        parent_y = np.full((h, w), -1, dtype=np.int16)
-        parent_x = np.full((h, w), -1, dtype=np.int16)
+        parent_y = np.full((h, w), -1, dtype=np.int32)
+        parent_x = np.full((h, w), -1, dtype=np.int32)
 
         g_score[sy, sx] = 0.0
 
@@ -238,12 +239,16 @@ class PathPlanner:
         ]
 
         open_set = []
+        f_score = np.full((h, w), INF, dtype=np.float32)
+        f_score[sy, sx] = 0.0
         heapq.heappush(open_set, (0.0, sy, sx))
 
         while open_set:
-            _, y, x = heapq.heappop(open_set)
+            f, y, x = heapq.heappop(open_set)
 
             if closed[y, x]:
+                continue
+            if f > f_score[y, x]:
                 continue
             closed[y, x] = True
 
@@ -279,8 +284,11 @@ class PathPlanner:
                 dxh = abs(nx - goal_cx)
                 dyh = abs(ny - goal_cy)
                 h_cost = max(dxh, dyh) + 0.414 * min(dxh, dyh)
-
-                heapq.heappush(open_set, (tentative_g + h_cost, ny, nx))
+                f_new = tentative_g + h_cost
+                if f_new >= f_score[ny, nx]:
+                    continue
+                f_score[ny, nx] = f_new
+                heapq.heappush(open_set, (f_new, ny, nx))
 
         return self.find_simple_path(start, goal_region), obstacle_pixels, goal_pixels
 
@@ -327,8 +335,8 @@ class PathPlanner:
         start_idx = self.world_to_grid(start)
         end_idx = self.world_to_grid(end)
 
-        x0, y0 = start_idx
-        x1, y1 = end_idx
+        y0, x0 = start_idx
+        y1, x1 = end_idx
         dx = abs(x1 - x0)
         dy = abs(y1 - y0)
         sx = 1 if x0 < x1 else -1
@@ -359,7 +367,7 @@ class PathPlanner:
         h, w = grid.shape
 
         visited = np.zeros((h, w), dtype=bool)
-        queue = [(sy, sx)]
+        queue = deque([(sy, sx)])
         visited[sy, sx] = True
 
         NEIGHBORS = [
@@ -370,7 +378,7 @@ class PathPlanner:
         ]
 
         while queue:
-            y, x = queue.pop(0)
+            y, x = queue.popleft()
 
             if not grid[y, x]:
                 return self.grid_to_world((y, x))
@@ -393,14 +401,14 @@ class PathPlanner:
     def find_simple_path(self, start, goal):
         """Find the closest point in the goal to the start and return a straight-line path."""
         goal_cells = goal.rasterize(self.grid, self.resolution, self.origin)
-        xs, ys = np.where(goal_cells)
+        ys, xs = np.where(goal_cells)
 
         start = np.asarray(start)
         best_pos = None
         best_dist = np.inf
 
-        for x, y in zip(xs, ys):
-            pos = self.grid_to_world((x, y))
+        for y, x in zip(ys, xs):
+            pos = self.grid_to_world((y, x))
             d = np.linalg.norm(pos - start)
             if d < best_dist:
                 best_dist = d

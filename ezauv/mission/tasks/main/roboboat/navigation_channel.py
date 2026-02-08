@@ -7,6 +7,7 @@ import numpy as np
 import time
 from enum import Enum
 from ezauv.map.roboboat_map import Color
+from ezauv.communications.report_pb2 import *
 
 class Stage(Enum):
     TRAVELING_GATES = 1
@@ -42,6 +43,10 @@ class NavigationChannel(WaypointTask):
 
     def finished(self) -> bool:
         return self.returned
+
+    def start(self, map):
+        super().start(map)
+        map.current_task = TaskType.TASK_NAV_CHANNEL
     
     def waypoint(self) -> np.ndarray:
         if self.stage == Stage.TRAVELING_GATES:

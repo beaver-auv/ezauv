@@ -7,6 +7,7 @@ from ezauv.simulation.fake_sensors import FakeIMU, FakeGPS, FakeDVL, FakeCamera
 from ezauv.simulation.fake_clock import FakeClock
 from scipy.spatial.transform import Rotation as R
 from copy import deepcopy
+from ezauv.telemetry import TELEMETRY
 # kinda sucks, 2d
 class Simulation:
 
@@ -151,6 +152,9 @@ class Simulation:
         # print("Motor magnitudes:", np.round(self.motor_magnitudes, 10))
         # print("\n\n\n")
         # print("Position:", np.round(self.location, 3))
+        TELEMETRY.submit("real velocity x", self.real_velocity[0])
+        TELEMETRY.submit("real velocity y", self.real_velocity[1])
+        TELEMETRY.submit("real angular velocity", self.real_angular_velocity)
         
         
     def render(self):

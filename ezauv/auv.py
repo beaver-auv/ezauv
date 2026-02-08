@@ -1,6 +1,7 @@
 import numpy as np
 import traceback
 import copy
+import time
 from typing import Callable, List
 from scipy.spatial.transform import Rotation as R
 
@@ -9,6 +10,7 @@ from ezauv.hardware.sensor_interface import SensorInterface
 from ezauv.mission.mission import Path, Subtask
 from ezauv.utils import Logger, LogLevel, Clock
 from ezauv.map import Map
+from ezauv.telemetry import TELEMETRY
 
 class AUV:
     def __init__(self, *,
@@ -73,7 +75,7 @@ class AUV:
         """Set all motors to 0 speed, killing the sub."""
         self.motor_controller.set_motors(np.array([0 for _ in self.motor_controller.motors]))
 
-    def travel_path(self, mission: Path) -> None:
+    def travel_path(self, mission: Path, end_telemetry = False) -> None:
         """Execute each Task in the given Path, in order, then kill the sub. Handles errors."""
 
         self.logger.log("Beginning path")
@@ -90,17 +92,19 @@ class AUV:
                     dt = now - prev_update
                     sensor_data = self.sensors.get_data()
                     sensor_data["dt"] = dt
+                    a = time.perf_counter()
                     self.map.update(sensor_data)
                     wanted_direction = copy.deepcopy(task.wanted_acceleration(self.map))
                     for subtask in self.subtasks:
                         wanted_direction += subtask.update()
-
                     rotation = sensor_data["rotation"] if "rotation" in sensor_data else R.identity()
+                    solve_start = time.perf_counter()
                     solved_motors = self.motor_controller.solve(
                         wanted_direction,
                         rotation,
                         self.lock_to_yaw
                     )
+                    TELEMETRY.submit("solve time", time.perf_counter() - solve_start)
 
                     if(solved_motors[0]):
                         self.motor_controller.set_motors(solved_motors[1])
@@ -109,6 +113,12 @@ class AUV:
                     # print("Time taken for loop (s):", np.round(self.clock.perf_counter() - prev_update, 4))
                     if(time_till_refresh > 0):
                         self.clock.sleep(time_till_refresh)
+                    d = time.perf_counter()
+                    TELEMETRY.submit("loop time", self.clock.perf_counter() - prev_update)
+                    TELEMETRY.step(self.clock.perf_counter())
+                    if self.clock.perf_counter() - prev_update > 0.3:
+                        # print(b - a, c - b, d - c)
+                        raise TimeoutError("Main loop is taking too long (>300ms)")
 
         except:
             self.logger.log(traceback.format_exc(), level=LogLevel.ERROR)
@@ -138,6 +148,9 @@ class AUV:
                         self.logger.log(f"{method_name.capitalize()} failed", level=LogLevel.ERROR)
                 else:
                     self.logger.log("All kills ineffective. Manual intervention required", level=LogLevel.ERROR)
-            
+
+            if end_telemetry:
+                TELEMETRY.kill()
+
             self.map.kill()
             self.logger.end()

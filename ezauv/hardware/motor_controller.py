@@ -1,5 +1,6 @@
 from typing import List, Callable, Optional
 import numpy as np
+import time
 from gurobipy import GRB, Model, quicksum
 from scipy.spatial.transform import Rotation as R
 from abc import ABC, abstractmethod
@@ -13,6 +14,7 @@ class OptimizerType(IntEnum):
     """Decides the method used to find the next-best acceleration if the wanted one is infeasible"""
     SCALE = 1
     OFFSET = 0
+
 
 class DeadzoneOptimizer:
     def __init__(self, M, bounds, deadzones, next_best: OptimizerType = OptimizerType.SCALE):
@@ -64,54 +66,83 @@ class DeadzoneOptimizer:
                 expr = quicksum(self.M[j, i] * self.u[i] for i in range(self.n)) + self.eps[j]
             self.constrs.append(self.model.addConstr(expr == 0, name=f"eq_row_{j}"))
 
+        if self.scale:
+            self.obj_eps = (self.eps - 1) * (self.eps - 1)
+        else:
+            self.obj_eps = quicksum(self.eps[j] * self.eps[j] for j in range(self.m))
+        self.obj_u = quicksum(self.u[i] * self.u[i] for i in range(self.n))
+
         self.model.update()
+        self.M_pinv = np.linalg.pinv(self.M)
+        self.bounds_lo = np.array([b[0] for b in bounds])
+        self.bounds_hi = np.array([b[1] for b in bounds])
+        self.deadzone_mag = np.array([
+            max(abs(d[0]), abs(d[1])) for d in deadzones
+        ])
 
-    def optimize(self, V, lock_to_yaw=False):
+
+    def optimize(self, V, lock_to_yaw=False, eps_tol=1e-6):
         if self.scale:
-            for j in range(self.m):
-                self.model.chgCoeff(self.constrs[j], self.eps, -V[j])
-        else:
-            for j in range(self.m):
-                self.constrs[j].setAttr(GRB.Attr.RHS, V[j])
+            u_des = self.M_pinv @ V
+            abs_u = np.abs(u_des)
 
-        if lock_to_yaw and not self.scale:
-            self.eps[3].LB = 0
-            self.eps[3].UB = 0
-            self.eps[4].LB = 0
-            self.eps[4].UB = 0
+            mask = abs_u > eps_tol
 
-        if self.scale:
-            self.model.setObjective((self.eps - 1) * (self.eps - 1), GRB.MINIMIZE)
-        else:
-            self.model.setObjective(quicksum(self.eps[j] * self.eps[j] for j in range(self.m)), GRB.MINIMIZE)
+            eps_max = 1.0
+            eps_max = min(
+                eps_max,
+                np.min(self.bounds_hi[mask] / abs_u[mask])
+            )
 
-        self.model.optimize()
-        if self.model.status != GRB.OPTIMAL:
-            return False, None
-        if self.scale:
-            self.eps.LB = self.eps.X
-            self.eps.UB = self.eps.X
+            eps_min = 0.0
+            eps_min = max(
+                eps_min,
+                np.max(self.deadzone_mag[mask] / abs_u[mask])
+            )
 
-        else:
+            if eps_min <= eps_max:
+                eps = min(1.0, eps_max)
+            else:
+                eps = 0.0
+
+            u = eps * u_des
+            u = np.clip(u, self.bounds_lo, self.bounds_hi)
+            u[np.abs(u) < eps_tol] = 0.0
+
+            return True, u
+
+        for j in range(self.m):
+            self.constrs[j].setAttr(GRB.Attr.RHS, V[j])
+
+            if lock_to_yaw:
+                self.eps[3].LB = 0
+                self.eps[3].UB = 0
+                self.eps[4].LB = 0
+                self.eps[4].UB = 0
+
+            self.model.setObjective(self.obj_eps, GRB.MINIMIZE)
+            self.model.optimize()
+
+            if self.model.status != GRB.OPTIMAL:
+                return False, None
+
             for j in range(self.m):
                 val = self.eps[j].X
                 self.eps[j].LB = val
                 self.eps[j].UB = val
 
-        self.model.setObjective(quicksum(self.u[i] * self.u[i] for i in range(self.n)), GRB.MINIMIZE)
-        self.model.optimize()
+            self.model.setObjective(self.obj_u, GRB.MINIMIZE)
+            self.model.optimize()
 
-        if self.scale:
-            self.eps.LB = 0.0
-            self.eps.UB = GRB.INFINITY
-        else:
             for j in range(self.m):
                 self.eps[j].LB = -GRB.INFINITY
                 self.eps[j].UB = GRB.INFINITY
 
-        if self.model.status == GRB.OPTIMAL:
-            return True, np.array([self.u[i].X for i in range(self.n)])
-        return False, None
+            if self.model.status == GRB.OPTIMAL:
+                return True, np.array([self.u[i].X for i in range(self.n)])
+
+            return False, None
+
 
 
 
@@ -237,7 +268,6 @@ class MotorController:
         rotated_wanted = np.append(acceleration.translation, np.array([Rx, Ry, Rz]))
 
         optimized = self.optimizer.optimize(rotated_wanted, lock_to_yaw)
-        
 
         if not optimized[0]:
             return False, None
@@ -253,7 +283,6 @@ class MotorController:
                 min([r.real for r in roots if abs(r.imag) < 1e-8],
                 key=lambda x: abs(x))
             )
-
         # acceleration = self.motor_matrix @ optimized[1]
         # # print("Motor matrix:\n", self.motor_matrix)
         # # print("Motor controls:", [np.round(speed, 3) for speed in motor_controls])

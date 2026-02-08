@@ -8,6 +8,9 @@ from time import time
 import numpy as np
 from ezauv.simulation.animator import set_obstacles
 from typing import Self
+from ezauv.communications.report_pb2 import *
+from ezauv.telemetry import TELEMETRY
+
 
 class Color(Enum):
     RED = "red"
@@ -83,6 +86,7 @@ class RoboBoatMap(ObstacleMap):
         self.entry_gates = []
         self.navigation_gates = []
         self.speed_challenge_gate = None
+        self.current_task = None
 
     def identify_gates(self):
         """Return a list of Gate objects identified in the map based on known red and green obstacles."""
@@ -124,3 +128,15 @@ class RoboBoatMap(ObstacleMap):
             if isinstance(o, ColorObstacle) and o.color == color and not o.beacon:
                 buoys.append(o)
         return buoys
+
+    def update(self, sensor_data):
+        super().update(sensor_data)
+        state = RobotState.STATE_AUTO
+        position = LatLng()
+        position.latitude = self.position[1]
+        position.longitude = self.position[0]
+
+        speed = np.linalg.norm(self.velocities)
+        heading_deg = np.degrees(self.heading)
+        current_task = self.current_task
+        TELEMETRY.set_state(state, position, speed, heading_deg, current_task)

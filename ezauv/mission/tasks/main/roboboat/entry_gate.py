@@ -2,6 +2,7 @@ from ezauv.mission.mission import Task
 from ezauv.mission.tasks.main.waypoint import WaypointTask
 from ezauv.map import CircleGridObject
 from ezauv import AccelerationState, TotalAccelerationState
+from ezauv.communications.report_pb2 import *
 from typing import Union
 import numpy as np
 import time
@@ -18,6 +19,10 @@ class EntryGate(WaypointTask):
         self.starting_heading = None
         
         super().__init__(TKp, TKi, TKd, RKp, RKi, RKd, HKp, HKi, HKd, lookahead_distance=lookahead_distance, slowing_distance=slowing_distance, stopping_distance=stopping_distance, allow_backup=allow_backup, allow_sideways=allow_sideways)
+
+    def start(self, map):
+        super().start(map)
+        map.current_task = TaskType.TASK_ENTRY_EXIT
 
     def finished(self) -> bool:
         was_traveled_first_gate = self.traveled_first_gate

@@ -26,14 +26,14 @@ class FakeIMU(Sensor):
 
 
     def get_data(self) -> dict:
-        rotation = float(self.heading_function() + std(self.heading_std))
+        rotation = (self.heading_function() + std(self.heading_std)).item()
         rot = R.from_euler('z', rotation)
         global_accel = self.acceleration_function() + std(self.acceleration_std, 3)
         
         acceleration = rot.apply(global_accel)
         
         angular_acceleration = self.angular_acceleration_function() + std(self.angular_acceleration_std)
-        gyro = float(self.angular_velocity_function() + std(self.angular_velocity_std))
+        gyro = (self.angular_velocity_function() + std(self.angular_velocity_std)).item()
         return {"rotation": rot, "acceleration": acceleration, "angular_acceleration": angular_acceleration, "gyro": gyro, "heading": rotation}
 
     def initialize(self):

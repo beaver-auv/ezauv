@@ -30,7 +30,6 @@ class ObstacleMap(FlatMap):
         self.obstacles = []
         self.dimensions = dimensions
 
-
         self.path_manager = PathManager(
             dimensions=dimensions,
             resolution=resolution,

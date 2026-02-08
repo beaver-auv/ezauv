@@ -6,6 +6,7 @@ from ezauv.map.roboboat_map import Color
 from typing import Union
 import numpy as np
 import time
+from ezauv.communications.report_pb2 import *
 
 
 class SpeedChallenge(WaypointTask):
@@ -26,7 +27,11 @@ class SpeedChallenge(WaypointTask):
 
     def finished(self) -> bool:
         return self.done
-    
+
+    def start(self, map):
+        super().start(map)
+        map.current_task = TaskType.TASK_SPEED_CHALLENGE
+
     def waypoint(self) -> np.ndarray:
         
         if(self.map.speed_challenge_gate):

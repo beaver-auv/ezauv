@@ -2,6 +2,7 @@ import numpy as np
 from ezauv.map.map import Map
 from ezauv.utils.kalman_filter import KalmanFilter2D
 from scipy.spatial.transform import Rotation as R
+from ezauv.telemetry import TELEMETRY
 
 class FlatMap(Map):    
     def __init__(self, max_velocity: float, bot_radius: float, R: np.ndarray = None, P0: np.ndarray = None, sigma_a: float=1, sigma_alpha: float=5.0):
@@ -14,6 +15,7 @@ class FlatMap(Map):
         self.max_speed = max_velocity
         self.bot_radius = bot_radius
         self.velocities = np.zeros((2,))   # velocity per-axis
+        self.angular_velocity = 0.0
         self.full_velocities = np.zeros((6,))  # full velocities, [x, y, z, roll, pitch, yaw]
         self.position = None
         self.heading = 0.0
@@ -148,3 +150,7 @@ class FlatMap(Map):
         self.velocities = np.array([x[3], x[4]])
         self.angular_velocity = x[5]
         self.full_velocities = np.array([x[3], x[4], 0.0, 0.0, 0.0, x[5]])
+
+        TELEMETRY.submit("estimated velocity x", self.velocities[0])
+        TELEMETRY.submit("estimated velocity y", self.velocities[1])
+        TELEMETRY.submit("estimated angular velocity", self.angular_velocity)
